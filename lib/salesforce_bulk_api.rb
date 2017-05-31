@@ -6,6 +6,7 @@ require 'csv'
 
 require 'salesforce_bulk_api/version'
 require 'salesforce_bulk_api/concerns/throttling'
+require 'salesforce_bulk_api/concerns/utils'
 require 'salesforce_bulk_api/job'
 require 'salesforce_bulk_api/connection'
 
@@ -38,6 +39,27 @@ module SalesforceBulkApi
       do_operation('query', sobject, query, nil, true, timeout, batch_size)
     end
 
+    def query_async(sobject, query, options={})
+      batch_size = options.fetch(:batch_size, 10000)
+      timeout = options.fetch(:timeout, 1500)
+
+      count :query
+
+      job = SalesforceBulkApi::Job.new(
+          operation: :query,
+          sobject: sobject,
+          records: query,
+          external_field: nil,
+          connection: @connection,
+          content_type: :csv
+      )
+
+      job_id = job.create_job(batch_size, false, [])
+      @listeners[:job_created].each { |callback| callback.call(job) }
+      job.add_query
+      job_id
+    end
+
     def counters
       {
         http_get: @connection.counters[:get],
@@ -60,8 +82,8 @@ module SalesforceBulkApi
       @listeners[:job_created] << block
     end
 
-    def job_from_id(job_id)
-      SalesforceBulkApi::Job.new(job_id: job_id, connection: @connection)
+    def job_from_id(job_id, content_type = :xml)
+      SalesforceBulkApi::Job.new(job_id: job_id, connection: @connection, content_type: content_type)
     end
 
     def do_operation(operation, sobject, records, external_field, get_response, timeout, batch_size, send_nulls = false, no_null_list = [])
@@ -84,6 +106,7 @@ module SalesforceBulkApi
     end
 
     private
+
     def get_counters
       @counters ||= Hash.new(0)
     end

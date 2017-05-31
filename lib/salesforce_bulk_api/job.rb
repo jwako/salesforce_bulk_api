@@ -1,6 +1,8 @@
 module SalesforceBulkApi
 
   class Job
+    include Concerns::Utils
+
     attr_reader :job_id
 
     class SalesforceException < StandardError; end
@@ -14,6 +16,7 @@ module SalesforceBulkApi
       @connection     = args[:connection]
       @batch_ids      = []
       @XML_HEADER     = '<?xml version="1.0" encoding="utf-8" ?>'
+      @content_type   = args.fetch(:content_type, :xml)
     end
 
     def create_job(batch_size, send_nulls, no_null_list)
@@ -28,7 +31,7 @@ module SalesforceBulkApi
       if !@external_field.nil?
         xml += "<externalIdFieldName>#{@external_field}</externalIdFieldName>"
       end
-      xml += "<contentType>XML</contentType>"
+      xml += "<contentType>#{@content_type.upcase}</contentType>"
       xml += "</jobInfo>"
 
       path = "job"
@@ -43,7 +46,7 @@ module SalesforceBulkApi
       @job_id = response_parsed['id'][0]
     end
 
-    def close_job()
+    def close_job
       xml = "#{@XML_HEADER}<jobInfo xmlns=\"http://www.force.com/2009/06/asyncapi/dataload\">"
       xml += "<state>Closed</state>"
       xml += "</jobInfo>"
@@ -57,11 +60,10 @@ module SalesforceBulkApi
 
     def add_query
       path = "job/#{@job_id}/batch/"
-      headers = Hash["Content-Type" => "application/xml; charset=UTF-8"]
+      headers = Hash['Content-Type' => "#{content_type_header}; charset=utf-8"]
 
       response = @connection.post_xml(nil, path, @records, headers)
       response_parsed = XmlSimple.xml_in(response)
-
       @batch_ids << response_parsed['id'][0]
     end
 
@@ -89,7 +91,7 @@ module SalesforceBulkApi
       end
       xml += '</sObjects>'
       path = "job/#{@job_id}/batch/"
-      headers = Hash["Content-Type" => "application/xml; charset=UTF-8"]
+      headers = Hash['Content-Type' => 'application/xml; charset=utf-8']
       response = @connection.post_xml(nil, path, xml, headers)
       response_parsed = XmlSimple.xml_in(response)
       response_parsed['id'][0] if response_parsed['id']
@@ -147,11 +149,20 @@ module SalesforceBulkApi
       end
     end
 
+    def check_batch_status_all
+      path = "job/#{@job_id}/batch"
+      response = @connection.get_request(nil, path, {})
+      response_parsed = XmlSimple.xml_in(response)
+      response_parsed
+    rescue StandardError => e
+      puts "Error parsing XML response for #{@job_id}"
+      puts e
+      puts e.backtrace
+    end
+
     def check_batch_status(batch_id)
       path = "job/#{@job_id}/batch/#{batch_id}"
-      headers = Hash.new
-
-      response = @connection.get_request(nil, path, headers)
+      response = @connection.get_request(nil, path, {})
 
       begin
         response_parsed = XmlSimple.xml_in(response) if response
@@ -205,7 +216,7 @@ module SalesforceBulkApi
 
     def get_batch_result(batch_id)
       path = "job/#{@job_id}/batch/#{batch_id}/result"
-      headers = Hash["Content-Type" => "application/xml; charset=UTF-8"]
+      headers = Hash['Content-Type' => 'application/xml; charset=utf-8']
 
       response = @connection.get_request(nil, path, headers)
       response_parsed = XmlSimple.xml_in(response)
@@ -215,7 +226,7 @@ module SalesforceBulkApi
         result_id = response_parsed["result"][0]
         path = "job/#{@job_id}/batch/#{batch_id}/result/#{result_id}"
         headers = Hash.new
-        headers = Hash["Content-Type" => "application/xml; charset=UTF-8"]
+        headers = Hash['Content-Type' => 'application/xml; charset=utf-8']
         response = @connection.get_request(nil, path, headers)
         response_parsed = XmlSimple.xml_in(response)
         results = response_parsed['records']
@@ -223,6 +234,34 @@ module SalesforceBulkApi
       results
     end
 
+    # Get query result by CSV
+    def get_query_result(batch_id, filepath)
+      path = "job/#{@job_id}/batch/#{batch_id}/result/#{result_id_for(batch_id)}"
+      headers = Hash['Content-Type' => 'text/csv; charset=utf-8']
+      response = @connection.get_request(nil, path, headers)
+      save_to_file(response, filepath)
+    end
+
+    def result_id_for(batch_id)
+      path = "job/#{@job_id}/batch/#{batch_id}/result"
+      headers = Hash['Content-Type' => 'application/xml; charset=utf-8']
+      response = @connection.get_request(nil, path, headers)
+      response_parsed = XmlSimple.xml_in(response)
+      response_parsed["result"][0]
+    end
+
+    private
+
+    def content_type_header
+      case @content_type
+      when :csv
+        return 'text/csv'
+      when :xml
+        return 'application/xml'
+      when :json
+        return 'application/json'
+      end
+    end
   end
 
   class JobTimeout < StandardError
