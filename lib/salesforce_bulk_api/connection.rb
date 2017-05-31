@@ -3,15 +3,29 @@ require 'timeout'
 
   class Connection
     include Concerns::Throttling
+    attr_reader :api_version
 
     LOGIN_HOST = 'login.salesforce.com'
+    DEFAULT_API_VERSION = '38.0'.freeze
 
-    def initialize(api_version, client)
+    def initialize(client)
       @client = client
-      @api_version = api_version
+      @api_version = api_version_for(client)
       @path_prefix = "/services/async/#{@api_version}/"
 
       login()
+    end
+
+    def api_version_for(client)
+      client_type = @client.class.to_s
+      case client_type
+      when "Restforce::Data::Client"
+        return client.options.fetch(:api_version, DEFAULT_API_VERSION) # returns DEFAULT_API_VERSION if no api_version
+      when "Databasedotcom::Client"
+        return client.version
+      else
+        raise TypeError, "Client must be a restforce or databasedotcom client."
+      end
     end
 
     def login()
