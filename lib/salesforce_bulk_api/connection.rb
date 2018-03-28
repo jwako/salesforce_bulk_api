@@ -6,7 +6,7 @@ require 'timeout'
     attr_reader :api_version
 
     LOGIN_HOST = 'login.salesforce.com'
-    DEFAULT_API_VERSION = '38.0'.freeze
+    DEFAULT_API_VERSION = '39.0'.freeze
 
     def initialize(client)
       @client = client

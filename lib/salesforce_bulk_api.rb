@@ -42,11 +42,12 @@ module SalesforceBulkApi
     def query_async(sobject, query, options={})
       batch_size = options.fetch(:batch_size, 10000)
       timeout = options.fetch(:timeout, 1500)
+      operation = options.fetch(:operation, 'query')
 
       count :query
 
       job = SalesforceBulkApi::Job.new(
-          operation: :query,
+          operation: operation,
           sobject: sobject,
           records: query,
           external_field: nil,

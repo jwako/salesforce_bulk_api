@@ -220,9 +220,9 @@ module SalesforceBulkApi
 
       response = @connection.get_request(nil, path, headers)
       response_parsed = XmlSimple.xml_in(response)
-      results = response_parsed['result'] unless @operation == 'query'
+      results = response_parsed['result'] unless @operation == 'query' || @operation == 'queryAll'
 
-      if(@operation == 'query') # The query op requires us to do another request to get the results
+      if(@operation == 'query' || @operation == 'queryAll') # The query op requires us to do another request to get the results
         result_id = response_parsed["result"][0]
         path = "job/#{@job_id}/batch/#{batch_id}/result/#{result_id}"
         headers = Hash.new
