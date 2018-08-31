@@ -236,18 +236,22 @@ module SalesforceBulkApi
 
     # Get query result by CSV
     def get_query_result(batch_id, filepath)
-      path = "job/#{@job_id}/batch/#{batch_id}/result/#{result_id_for(batch_id)}"
       headers = Hash['Content-Type' => 'text/csv; charset=utf-8']
-      response = @connection.get_request(nil, path, headers)
-      save_to_file(response, filepath)
+      result_ids_for(batch_id).each_with_index do |result_id, i|
+        path = "job/#{@job_id}/batch/#{batch_id}/result/#{result_id}"
+        response = @connection.get_request(nil, path, headers)
+        tmppath  = filepath.sub(".csv", "_#{i+1}.csv")
+        save_to_file(response, tmppath)
+      end
     end
 
-    def result_id_for(batch_id)
+    # @return [Array]
+    def result_ids_for(batch_id)
       path = "job/#{@job_id}/batch/#{batch_id}/result"
       headers = Hash['Content-Type' => 'application/xml; charset=utf-8']
       response = @connection.get_request(nil, path, headers)
       response_parsed = XmlSimple.xml_in(response)
-      response_parsed["result"][0]
+      response_parsed["result"]
     end
 
     private
